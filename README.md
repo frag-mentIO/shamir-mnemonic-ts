@@ -1,25 +1,32 @@
 # Shamir Mnemonic TypeScript
 
-TypeScript implementation of SLIP-0039 Shamir Secret Sharing for mnemonic seed phrases.
+TypeScript implementation of [SLIP-0039](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) Shamir Secret Sharing for mnemonic seed phrases.
 
 This is a complete conversion of the Python [python-shamir-mnemonic](https://github.com/trezor/python-shamir-mnemonic/tree/master) reference implementation to TypeScript for Node.js.
 
+**Zero runtime dependencies.** This library does not depend on any third-party packages.
+
+## Features
+
+- **SLIP-0039 compliant** — Binary-compatible with the standard mnemonic format
+- **Group sharing** — Split a secret across multiple groups (e.g. 2-of-3 groups, each with its own member threshold)
+- **Passphrase protection** — Optional encryption of the master secret (printable ASCII only)
+- **Extendable backups** — Support for iteration exponent to strengthen passphrase derivation
+- **Low-level API** — `splitEms` / `recoverEms` for working with encrypted master secrets, plus `encrypt` / `decrypt` and `decodeMnemonics`
+- **Interactive recovery** — `RecoveryState` for step-by-step mnemonic entry and progress tracking
+
+## Requirements
+
+- **Node.js** >= 14.0.0
+
 ## Specification
 
-See [https://github.com/satoshilabs/slips/blob/master/slip-0039.md](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) for full specification.
+See [SLIP-0039](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) for the full specification.
 
 ## Installation
 
-### From npm (for users)
-
 ```bash
 npm install shamir-mnemonic-ts
-```
-
-## Building
-
-```bash
-npm run build
 ```
 
 ## Testing
@@ -31,40 +38,101 @@ npm run test:vectors
 
 ## Usage
 
+### Basic: split and recover
+
 ```typescript
 import * as shamir from 'shamir-mnemonic-ts';
 
-// Generate mnemonic shares
 const masterSecret = Buffer.from('your-secret-here');
 const mnemonics = shamir.generateMnemonics(
-  1,                    // group threshold
-  [[3, 5]],            // (member threshold, member count) for each group
-  masterSecret,
-  Buffer.from('passphrase', 'utf8')
+  1,           // group threshold (1 group required)
+  [[3, 5]],    // (member threshold, member count): 3 of 5 shares per group
+  masterSecret
 );
 
-// Recover master secret
+// Recover with any 3 of 5 shares
+const recovered = shamir.combineMnemonics(mnemonics[0].slice(0, 3));
+```
+
+### With passphrase
+
+```typescript
+import * as shamir from 'shamir-mnemonic-ts';
+
+const masterSecret = Buffer.from('your-secret-here');
+const passphrase = Buffer.from('my passphrase', 'utf8');
+const mnemonics = shamir.generateMnemonics(
+  1,
+  [[3, 5]],
+  masterSecret,
+  passphrase
+)[0];
+
 const recovered = shamir.combineMnemonics(
-  mnemonics[0].slice(0, 3),  // any 3 of 5 shares
-  Buffer.from('passphrase', 'utf8')
+  mnemonics.slice(0, 3),
+  passphrase
 );
 ```
 
-## Structure
+### Group sharing (e.g. 2-of-3 groups)
 
-- `src/constants.ts` - SLIP-0039 constants
-- `src/utils.ts` - Utility functions and error classes
-- `src/wordlist.ts` - Wordlist management
-- `src/rs1024.ts` - RS1024 checksum implementation
-- `src/cipher.ts` - Feistel cipher for encryption/decryption
-- `src/share.ts` - Share encoding/decoding
-- `src/shamir.ts` - Core Shamir secret sharing algorithms
-- `src/recovery.ts` - Interactive recovery state management
-- `src/index.ts` - Public API exports
+```typescript
+import * as shamir from 'shamir-mnemonic-ts';
+
+const masterSecret = Buffer.from('your-secret-here');
+// 2 groups required; each group has (member threshold, member count)
+const mnemonics = shamir.generateMnemonics(
+  2,                      // group threshold
+  [[3, 5], [2, 3], [1, 1]],  // group 0: 3-of-5, group 1: 2-of-3, group 2: 1-of-1
+  masterSecret
+);
+
+// Recover with any 2 groups (e.g. 3 from group 0 + 2 from group 1)
+const subset = [
+  ...mnemonics[0].slice(0, 3),
+  ...mnemonics[1].slice(0, 2),
+];
+const recovered = shamir.combineMnemonics(subset);
+```
+
+### Interactive recovery with `RecoveryState`
+
+```typescript
+import * as shamir from 'shamir-mnemonic-ts';
+
+const state = new shamir.RecoveryState();
+const passphrase = Buffer.from('my passphrase', 'utf8');
+
+// Add mnemonics one by one (e.g. from user input)
+function addMnemonic(mnemonic: string) {
+  const groups = shamir.decodeMnemonics([mnemonic]);
+  for (const group of groups.values()) {
+    for (const share of group) state.addShare(share);
+  }
+}
+addMnemonic('academic academic academic ...');  // first share
+addMnemonic('academic academic academic ...');  // second share
+// ...
+
+state.groupStatus(0);   // [entered, threshold] for group 0
+state.groupPrefix(0);   // first words of group 0
+state.isComplete();     // true when enough shares to recover
+
+const recovered = state.recover(passphrase);
+```
+
 
 ## Compatibility
 
 This implementation is binary-compatible with the SLIP-0039 standard and produces/consumes the standard mnemonic format.
+
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
