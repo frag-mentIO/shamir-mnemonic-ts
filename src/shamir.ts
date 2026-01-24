@@ -11,7 +11,7 @@ import {
   SECRET_INDEX,
 } from './constants';
 import { Share, ShareCommonParameters, ShareGroupParameters } from './share';
-import { MnemonicError, bitsToBytes } from './utils';
+import { MnemonicError, bitsToBytes, constantTimeEquals, secureBufferCopy, secureBufferFill } from './utils';
 
 export interface RawShare {
   x: number;
@@ -45,7 +45,7 @@ export class ShareGroup {
         share.groupCount === obj.groupCount &&
         share.index === obj.index &&
         share.memberThreshold === obj.memberThreshold &&
-        share.value.equals(obj.value)
+        constantTimeEquals(share.value, obj.value)
       ) {
         return true;
       }
@@ -172,6 +172,13 @@ export class EncryptedMasterSecret {
     );
   }
 
+  /**
+   * Decrypt the master secret using the passphrase.
+   * @param passphrase The passphrase used to encrypt the master secret.
+   * @return The master secret.
+   * @security The returned buffer contains sensitive data. Callers MUST clean it up
+   *           using secureBufferFill() after use to prevent memory leaks.
+   */
   decrypt(passphrase: Buffer): Buffer {
     return cipher.decrypt(
       this.ciphertext,
@@ -234,7 +241,7 @@ function _interpolate(shares: RawShare[], x: number): Buffer {
   if (xCoordinates.has(x)) {
     for (const share of shares) {
       if (share.x === x) {
-        return share.data;
+        return secureBufferCopy(share.data);
       }
     }
   }
@@ -275,7 +282,9 @@ function _interpolate(shares: RawShare[], x: number): Buffer {
 function _createDigest(randomData: Buffer, sharedSecret: Buffer): Buffer {
   const hmac = crypto.createHmac('sha256', randomData);
   hmac.update(sharedSecret);
-  return hmac.digest().slice(0, DIGEST_LENGTH_BYTES);
+  const fullDigest = hmac.digest();
+  const result = secureBufferCopy(fullDigest, 0, DIGEST_LENGTH_BYTES);
+  return result;
 }
 
 function _splitSecret(
@@ -303,7 +312,7 @@ function _splitSecret(
   if (threshold === 1) {
     return Array.from({ length: shareCount }, (_, i) => ({
       x: i,
-      data: sharedSecret,
+      data: secureBufferCopy(sharedSecret),
     }));
   }
 
@@ -323,6 +332,10 @@ function _splitSecret(
     { x: SECRET_INDEX, data: sharedSecret },
   ];
 
+  // Clean up randomPart and digest after they're copied into baseShares
+  secureBufferFill(randomPart);
+  secureBufferFill(digest);
+
   for (let i = randomShareCount; i < shareCount; i++) {
     shares.push({ x: i, data: _interpolate(baseShares, i) });
   }
@@ -333,19 +346,51 @@ function _splitSecret(
 function _recoverSecret(threshold: number, shares: RawShare[]): Buffer {
   // If the threshold is 1, then the digest of the shared secret is not used.
   if (threshold === 1) {
-    return shares[0].data;
+    return secureBufferCopy(shares[0].data);
   }
 
-  const sharedSecret = _interpolate(shares, SECRET_INDEX);
-  const digestShare = _interpolate(shares, DIGEST_INDEX);
-  const digest = digestShare.slice(0, DIGEST_LENGTH_BYTES);
-  const randomPart = digestShare.slice(DIGEST_LENGTH_BYTES);
+  let sharedSecret: Buffer | undefined;
+  let digestShare: Buffer | undefined;
+  let digest: Buffer | undefined;
+  let randomPart: Buffer | undefined;
 
-  if (!digest.equals(_createDigest(randomPart, sharedSecret))) {
-    throw new MnemonicError('Invalid digest of the shared secret.');
+  try {
+    sharedSecret = _interpolate(shares, SECRET_INDEX);
+    digestShare = _interpolate(shares, DIGEST_INDEX);
+    digest = secureBufferCopy(digestShare, 0, DIGEST_LENGTH_BYTES);
+    randomPart = secureBufferCopy(digestShare, DIGEST_LENGTH_BYTES);
+
+    if (!constantTimeEquals(digest, _createDigest(randomPart, sharedSecret))) {
+      // Clean up buffers before throwing error
+      secureBufferFill(digest);
+      secureBufferFill(randomPart);
+      secureBufferFill(digestShare);
+      throw new MnemonicError('Invalid digest of the shared secret.');
+    }
+
+    // Clean up temporary buffers before returning
+    secureBufferFill(digest);
+    secureBufferFill(randomPart);
+    secureBufferFill(digestShare);
+
+    // Create a copy to return, original will be cleaned in finally
+    const result = secureBufferCopy(sharedSecret);
+    return result;
+  } finally {
+    // Ensure sharedSecret is cleaned even if an exception occurs
+    if (sharedSecret !== undefined) {
+      secureBufferFill(sharedSecret);
+    }
+    if (digestShare !== undefined) {
+      secureBufferFill(digestShare);
+    }
+    if (digest !== undefined) {
+      secureBufferFill(digest);
+    }
+    if (randomPart !== undefined) {
+      secureBufferFill(randomPart);
+    }
   }
-
-  return sharedSecret;
 }
 
 export function decodeMnemonics(mnemonics: Iterable<string>): Map<number, ShareGroup> {
@@ -435,21 +480,25 @@ export function splitEms(
 
   return groups.map(([memberThreshold, memberCount], groupIndex) => {
     const groupSecret = groupShares[groupIndex].data;
-    const memberShares = _splitSecret(memberThreshold, memberCount, groupSecret);
+    try {
+      const memberShares = _splitSecret(memberThreshold, memberCount, groupSecret);
 
-    return memberShares.map(({ x: memberIndex, data: value }) => {
-      return new Share(
-        encryptedMasterSecret.identifier,
-        encryptedMasterSecret.extendable,
-        encryptedMasterSecret.iterationExponent,
-        groupIndex,
-        groupThreshold,
-        groups.length,
-        memberIndex,
-        memberThreshold,
-        value
-      );
-    });
+      return memberShares.map(({ x: memberIndex, data: value }) => {
+        return new Share(
+          encryptedMasterSecret.identifier,
+          encryptedMasterSecret.extendable,
+          encryptedMasterSecret.iterationExponent,
+          groupIndex,
+          groupThreshold,
+          groups.length,
+          memberIndex,
+          memberThreshold,
+          value
+        );
+      });
+    } finally {
+      secureBufferFill(groupSecret);
+    }
   });
 }
 
@@ -586,6 +635,8 @@ export function combineMnemonics(
    * @param mnemonics List of mnemonics.
    * @param passphrase The passphrase used to encrypt the master secret.
    * @return The master secret.
+   * @security The returned buffer contains sensitive data. Callers MUST clean it up
+   *           using secureBufferFill() after use to prevent memory leaks.
    */
   if (!mnemonics || Array.from(mnemonics).length === 0) {
     throw new MnemonicError('The list of mnemonics is empty.');

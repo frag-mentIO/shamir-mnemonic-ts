@@ -35,3 +35,50 @@ export function* intToIndices(value: number, length: number, radixBits: number):
     yield (value >> (i * radixBits)) & mask;
   }
 }
+
+/**
+ * Constant-time buffer comparison to prevent timing attacks.
+ * Returns true if buffers are equal, false otherwise.
+ * Always takes the same amount of time regardless of buffer contents.
+ */
+export function constantTimeEquals(a: Buffer, b: Buffer): boolean {
+  if (a.length !== b.length) {
+    // Still perform comparison to maintain constant time
+    let dummy = 0;
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      dummy |= a[i] ^ b[i];
+    }
+    return false;
+  }
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
+  }
+  return result === 0;
+}
+
+/**
+ * Creates an independent copy of a buffer (or portion of it).
+ * Use this instead of .slice() when working with sensitive data.
+ */
+export function secureBufferCopy(
+  source: Buffer,
+  start: number = 0,
+  end?: number
+): Buffer {
+  const endIndex = end !== undefined ? end : source.length;
+  const length = endIndex - start;
+  const copy = Buffer.allocUnsafe(length);
+  source.copy(copy, 0, start, endIndex);
+  return copy;
+}
+
+/**
+ * Securely overwrites a buffer with zeros.
+ * Note: In JavaScript, this doesn't guarantee memory is cleared
+ * (due to GC), but it's a best practice.
+ */
+export function secureBufferFill(buffer: Buffer, value: number = 0): void {
+  buffer.fill(value);
+}

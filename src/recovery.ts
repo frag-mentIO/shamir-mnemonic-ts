@@ -130,8 +130,14 @@ export class RecoveryState {
     return group ? group.has(obj) : false;
   }
 
+  /**
+   * Recover the master secret, given a passphrase.
+   * @param passphrase The passphrase used to encrypt the master secret.
+   * @return The master secret.
+   * @security The returned buffer contains sensitive data. Callers MUST clean it up
+   *           using secureBufferFill() after use to prevent memory leaks.
+   */
   recover(passphrase: Buffer): Buffer {
-    /** Recover the master secret, given a passphrase. */
     // Select a subset of shares which meets the thresholds.
     const reducedGroups: Map<number, ShareGroup> = new Map();
     

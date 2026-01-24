@@ -5,7 +5,7 @@ import {
   ID_LENGTH_BITS,
   ROUND_COUNT,
 } from './constants';
-import { bitsToBytes } from './utils';
+import { bitsToBytes, secureBufferCopy, secureBufferFill } from './utils';
 
 function _xor(a: Buffer, b: Buffer): Buffer {
   const result = Buffer.alloc(a.length);
@@ -23,13 +23,24 @@ function _roundFunction(
   r: Buffer
 ): Buffer {
   /** The round function used internally by the Feistel cipher. */
-  return crypto.pbkdf2Sync(
-    Buffer.concat([Buffer.from([i]), passphrase]),
-    Buffer.concat([salt, r]),
+  const iBuffer = Buffer.from([i]);
+  const passphraseConcat = Buffer.concat([iBuffer, passphrase]);
+  const saltConcat = Buffer.concat([salt, r]);
+  
+  const result = crypto.pbkdf2Sync(
+    passphraseConcat,
+    saltConcat,
     (BASE_ITERATION_COUNT << e) / ROUND_COUNT,
     r.length,
     'sha256'
   );
+  
+  // Clean up temporary buffers containing sensitive data
+  secureBufferFill(iBuffer);
+  secureBufferFill(passphraseConcat);
+  secureBufferFill(saltConcat);
+  
+  return result;
 }
 
 function _getSalt(identifier: number, extendable: boolean): Buffer {
@@ -55,8 +66,8 @@ export function encrypt(
     );
   }
 
-  let l: Buffer = masterSecret.slice(0, masterSecret.length / 2);
-  let r: Buffer = masterSecret.slice(masterSecret.length / 2);
+  let l: Buffer = secureBufferCopy(masterSecret, 0, masterSecret.length / 2);
+  let r: Buffer = secureBufferCopy(masterSecret, masterSecret.length / 2);
   const salt = _getSalt(identifier, extendable);
 
   for (let i = 0; i < ROUND_COUNT; i++) {
@@ -64,9 +75,17 @@ export function encrypt(
     const temp = l;
     l = r;
     r = _xor(temp, f);
+    // Clean up buffer f containing sensitive data derived from passphrase
+    secureBufferFill(f);
   }
 
-  return Buffer.concat([r, l]);
+  const result = Buffer.concat([r, l]);
+  
+  // Clean up temporary buffers after creating result
+  secureBufferFill(l);
+  secureBufferFill(r);
+
+  return result;
 }
 
 export function decrypt(
@@ -82,8 +101,8 @@ export function decrypt(
     );
   }
 
-  let l: Buffer = encryptedMasterSecret.slice(0, encryptedMasterSecret.length / 2);
-  let r: Buffer = encryptedMasterSecret.slice(encryptedMasterSecret.length / 2);
+  let l: Buffer = secureBufferCopy(encryptedMasterSecret, 0, encryptedMasterSecret.length / 2);
+  let r: Buffer = secureBufferCopy(encryptedMasterSecret, encryptedMasterSecret.length / 2);
   const salt = _getSalt(identifier, extendable);
 
   for (let i = ROUND_COUNT - 1; i >= 0; i--) {
@@ -91,7 +110,15 @@ export function decrypt(
     const temp = l;
     l = r;
     r = _xor(temp, f);
+    // Clean up buffer f containing sensitive data derived from passphrase
+    secureBufferFill(f);
   }
 
-  return Buffer.concat([r, l]);
+  const result = Buffer.concat([r, l]);
+  
+  // Clean up temporary buffers after creating result
+  secureBufferFill(l);
+  secureBufferFill(r);
+
+  return result;
 }

@@ -54,6 +54,8 @@ const mnemonics = shamir.generateMnemonics(
 const recovered = shamir.combineMnemonics(mnemonics[0].slice(0, 3));
 ```
 
+Production code should wipe the recovered buffer after use; see [Handling sensitive data](#handling-sensitive-data) and the [Secure cleanup](#secure-cleanup) example.
+
 ### With passphrase
 
 ```typescript
@@ -121,12 +123,38 @@ state.isComplete();     // true when enough shares to recover
 const recovered = state.recover(passphrase);
 ```
 
+### Secure cleanup
+
+Always wipe the recovered master secret after use. Use `try/finally` so cleanup runs even on error:
+
+```typescript
+import * as shamir from 'shamir-mnemonic-ts';
+
+const mnemonics = [/* ... */];
+let recovered: Buffer | null = null;
+try {
+  recovered = shamir.combineMnemonics(mnemonics);
+  // use recovered (e.g. derive keys, compare, pass to another module)
+} finally {
+  if (recovered) recovered.fill(0);
+}
+```
 
 ## Compatibility
 
 This implementation is binary-compatible with the SLIP-0039 standard and produces/consumes the standard mnemonic format.
 
 ## Security
+
+### Handling sensitive data
+
+The following APIs return a `Buffer` containing the master secret:
+
+- `combineMnemonics`
+- `EncryptedMasterSecret.decrypt`
+- `RecoveryState.recover`
+
+**Callers must overwrite this buffer after use** (e.g. `buffer.fill(0)`) to limit exposure in memory. Do this in a `try/finally` block so cleanup runs even when an error is thrown. The usage examples in the [Usage](#usage) section are simplified; production code should apply this cleanup. See the [Secure cleanup](#secure-cleanup) example.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
