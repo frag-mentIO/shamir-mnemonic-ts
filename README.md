@@ -16,12 +16,6 @@ See [https://github.com/satoshilabs/slips/blob/master/slip-0039.md](https://gith
 npm install shamir-mnemonic-ts
 ```
 
-### Development setup
-
-```bash
-npm install
-```
-
 ## Building
 
 ```bash
