@@ -38,12 +38,19 @@ npm run test:vectors
 
 ## Usage
 
+### Master secret
+
+The master secret must have an **even length in bytes** (e.g. 16, 20, 24, 28, or 32). This is required because passphrase encryption uses a **Feistel cipher** that splits the secret into two equal halves (L and R); an odd length cannot be divided evenly.
+
+- **Hex**: Use a hex string with an **even number of characters** (2 hex digits = 1 byte). Example: `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 chars = 16 bytes).
+- **BIP39**: The entropy of a BIP39 seed (128–256 bits) always has an even byte length (16, 20, 24, 28, 32), so it is suitable as a master secret.
+
 ### Basic: split and recover
 
 ```typescript
 import * as shamir from 'shamir-mnemonic-ts';
 
-const masterSecret = Buffer.from('your-secret-here');
+const masterSecret = Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex');
 const mnemonics = shamir.generateMnemonics(
   1,           // group threshold (1 group required)
   [[3, 5]],    // (member threshold, member count): 3 of 5 shares per group
@@ -61,7 +68,7 @@ Production code should wipe the recovered buffer after use; see [Handling sensit
 ```typescript
 import * as shamir from 'shamir-mnemonic-ts';
 
-const masterSecret = Buffer.from('your-secret-here');
+const masterSecret = Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex');
 const passphrase = Buffer.from('my passphrase', 'utf8');
 const mnemonics = shamir.generateMnemonics(
   1,
@@ -81,7 +88,7 @@ const recovered = shamir.combineMnemonics(
 ```typescript
 import * as shamir from 'shamir-mnemonic-ts';
 
-const masterSecret = Buffer.from('your-secret-here');
+const masterSecret = Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex');
 // 2 groups required; each group has (member threshold, member count)
 const mnemonics = shamir.generateMnemonics(
   2,                      // group threshold
