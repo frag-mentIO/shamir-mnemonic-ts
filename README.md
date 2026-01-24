@@ -2,7 +2,11 @@
 
 TypeScript implementation of SLIP-0039 Shamir Secret Sharing for mnemonic seed phrases.
 
-This is a complete conversion of the Python `python-shamir-mnemonic` reference implementation to TypeScript for Node.js.
+This is a complete conversion of the Python [python-shamir-mnemonic](https://github.com/trezor/python-shamir-mnemonic/tree/master) reference implementation to TypeScript for Node.js.
+
+## Specification
+
+See [https://github.com/satoshilabs/slips/blob/master/slip-0039.md](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) for full specification.
 
 ## Installation
 
