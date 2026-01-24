@@ -1,6 +1,6 @@
 {
   "name": "shamir-mnemonic-ts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "TypeScript implementation of SLIP-0039 Shamir Secret Sharing for mnemonic seed phrases",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,11 @@
     "slip-0039",
     "cryptography"
   ],
-  "author": "FRAG-MENT",
+  "author": {
+    "name": "FRAG-MENT",
+    "email": "contact@frag-ment.io",
+    "url": "https://frag-ment.io"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
