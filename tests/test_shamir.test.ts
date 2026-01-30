@@ -211,6 +211,38 @@ describe('Shamir Mnemonic Tests', () => {
     }).toThrow();
   });
 
+  const MASTER_SECRET_SIZES = [16, 20, 24, 28, 32] as const;
+
+  test.each(MASTER_SECRET_SIZES)(
+    'split and reconstruct master secret of %i bytes',
+    (size) => {
+      const masterSecret = crypto.randomBytes(size);
+      const mnemonics = shamir.generateMnemonics(1, [[3, 5]], masterSecret)[0];
+      const recovered = shamir.combineMnemonics(mnemonics.slice(0, 3));
+      expect(recovered.length).toBe(size);
+      expect(recovered.equals(masterSecret)).toBe(true);
+    }
+  );
+
+  test('split and reconstruct master secret of 16/20/24/28/32 bytes with passphrase', () => {
+    for (const size of MASTER_SECRET_SIZES) {
+      const masterSecret = crypto.randomBytes(size);
+      const passphrase = Buffer.from('TREZOR', 'utf8');
+      const mnemonics = shamir.generateMnemonics(
+        1,
+        [[3, 5]],
+        masterSecret,
+        passphrase
+      )[0];
+      const recovered = shamir.combineMnemonics(
+        mnemonics.slice(0, 3),
+        passphrase
+      );
+      expect(recovered.length).toBe(size);
+      expect(recovered.equals(masterSecret)).toBe(true);
+    }
+  });
+
   test('split ems', () => {
     const encryptedMasterSecret = shamir.EncryptedMasterSecret.fromMasterSecret(
       MS,
