@@ -11,7 +11,7 @@ import {
   SECRET_INDEX,
 } from './constants';
 import { Share, ShareCommonParameters, ShareGroupParameters } from './share';
-import { MnemonicError, bitsToBytes, constantTimeEquals, secureBufferCopy, secureBufferFill } from './utils';
+import { MnemonicError, bitsToBytes, constantTimeEquals, normalizePassphrase, Passphrase, secureBufferCopy, secureBufferFill } from './utils';
 
 export interface RawShare {
   x: number;
@@ -174,15 +174,16 @@ export class EncryptedMasterSecret {
 
   /**
    * Decrypt the master secret using the passphrase.
-   * @param passphrase The passphrase used to encrypt the master secret.
+   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
    * @security The returned buffer contains sensitive data. Callers MUST clean it up
    *           using secureBufferFill() after use to prevent memory leaks.
    */
-  decrypt(passphrase: Buffer): Buffer {
+  decrypt(passphrase: Passphrase): Buffer {
+    const passphraseBuf = normalizePassphrase(passphrase);
     return cipher.decrypt(
       this.ciphertext,
-      passphrase,
+      passphraseBuf,
       this.iterationExponent,
       this.identifier,
       this.extendable
@@ -517,7 +518,7 @@ export function generateMnemonics(
   groupThreshold: number,
   groups: Array<[number, number]>,
   masterSecret: Buffer,
-  passphrase: Buffer = Buffer.alloc(0),
+  passphrase: Passphrase = Buffer.alloc(0),
   extendable: boolean = true,
   iterationExponent: number = 1
 ): string[][] {
@@ -535,13 +536,14 @@ export function generateMnemonics(
    *   is the number of shares to generate for the group and member_threshold is the number of members required to
    *   reconstruct the group secret.
    * @param masterSecret The master secret to split.
-   * @param passphrase The passphrase used to encrypt the master secret.
+   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @param iterationExponent The encryption iteration exponent.
    * @return List of groups mnemonics.
    */
+  const passphraseBuf = normalizePassphrase(passphrase);
   // Validate passphrase contains only printable ASCII characters (code points 32-126)
-  for (let i = 0; i < passphrase.length; i++) {
-    const code = passphrase[i];
+  for (let i = 0; i < passphraseBuf.length; i++) {
+    const code = passphraseBuf[i];
     if (code < 32 || code > 126) {
       throw new Error(
         'The passphrase must contain only printable ASCII characters (code points 32-126).'
@@ -552,7 +554,7 @@ export function generateMnemonics(
   const identifier = _randomIdentifier();
   const encryptedMasterSecret = EncryptedMasterSecret.fromMasterSecret(
     masterSecret,
-    passphrase,
+    passphraseBuf,
     identifier,
     extendable,
     iterationExponent
@@ -623,7 +625,7 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
 
 export function combineMnemonics(
   mnemonics: Iterable<string>,
-  passphrase: Buffer = Buffer.alloc(0)
+  passphrase: Passphrase = Buffer.alloc(0)
 ): Buffer {
   /**
    * Combine mnemonic shares to obtain the master secret which was previously split
@@ -633,7 +635,7 @@ export function combineMnemonics(
    * by a passphrase.
    *
    * @param mnemonics List of mnemonics.
-   * @param passphrase The passphrase used to encrypt the master secret.
+   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
    * @security The returned buffer contains sensitive data. Callers MUST clean it up
    *           using secureBufferFill() after use to prevent memory leaks.

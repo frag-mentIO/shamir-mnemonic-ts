@@ -1,7 +1,7 @@
 import { GROUP_PREFIX_LENGTH_WORDS } from './constants';
 import { ShareGroup, recoverEms } from './shamir';
 import { Share, ShareCommonParameters } from './share';
-import { MnemonicError } from './utils';
+import { MnemonicError, Passphrase } from './utils';
 
 export const UNDETERMINED = -1;
 
@@ -132,12 +132,12 @@ export class RecoveryState {
 
   /**
    * Recover the master secret, given a passphrase.
-   * @param passphrase The passphrase used to encrypt the master secret.
+   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
    * @security The returned buffer contains sensitive data. Callers MUST clean it up
    *           using secureBufferFill() after use to prevent memory leaks.
    */
-  recover(passphrase: Buffer): Buffer {
+  recover(passphrase: Passphrase): Buffer {
     // Select a subset of shares which meets the thresholds.
     const reducedGroups: Map<number, ShareGroup> = new Map();
     

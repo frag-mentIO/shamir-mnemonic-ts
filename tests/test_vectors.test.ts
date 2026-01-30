@@ -12,7 +12,7 @@ describe('Test Vectors', () => {
     test(description, () => {
       if (secretHex) {
         const secret = Buffer.from(secretHex, 'hex');
-        const recovered = shamir.combineMnemonics(mnemonics, Buffer.from('TREZOR', 'utf8'));
+        const recovered = shamir.combineMnemonics(mnemonics, 'TREZOR');
         expect(recovered.equals(secret)).toBe(true);
         
         // Note: BIP32 xprv validation would require bip32utils equivalent

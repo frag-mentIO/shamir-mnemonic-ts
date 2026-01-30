@@ -45,14 +45,21 @@ describe('Shamir Mnemonic Tests', () => {
     }).toThrow(shamir.MnemonicError);
   });
 
-  test('passphrase', () => {
-    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, Buffer.from('TREZOR', 'utf8'))[0];
+  test('passphrase (string)', () => {
+    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, 'TREZOR')[0];
     expect(
-      shamir.combineMnemonics(mnemonics.slice(1, 4), Buffer.from('TREZOR', 'utf8')).equals(MS)
+      shamir.combineMnemonics(mnemonics.slice(1, 4), 'TREZOR').equals(MS)
     ).toBe(true);
     expect(
       shamir.combineMnemonics(mnemonics.slice(1, 4)).equals(MS)
     ).toBe(false);
+  });
+
+  test('passphrase (Buffer, backward compatibility)', () => {
+    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, Buffer.from('TREZOR', 'utf8'))[0];
+    expect(
+      shamir.combineMnemonics(mnemonics.slice(1, 4), Buffer.from('TREZOR', 'utf8')).equals(MS)
+    ).toBe(true);
   });
 
   test('non extendable', () => {
@@ -61,31 +68,17 @@ describe('Shamir Mnemonic Tests', () => {
   });
 
   test('iteration exponent', () => {
-    let mnemonics = shamir.generateMnemonics(
-      1,
-      [[3, 5]],
-      MS,
-      Buffer.from('TREZOR', 'utf8'),
-      true,
-      1
-    )[0];
+    let mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, 'TREZOR', true, 1)[0];
     expect(
-      shamir.combineMnemonics(mnemonics.slice(1, 4), Buffer.from('TREZOR', 'utf8')).equals(MS)
+      shamir.combineMnemonics(mnemonics.slice(1, 4), 'TREZOR').equals(MS)
     ).toBe(true);
     expect(
       shamir.combineMnemonics(mnemonics.slice(1, 4)).equals(MS)
     ).toBe(false);
 
-    mnemonics = shamir.generateMnemonics(
-      1,
-      [[3, 5]],
-      MS,
-      Buffer.from('TREZOR', 'utf8'),
-      true,
-      2
-    )[0];
+    mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, 'TREZOR', true, 2)[0];
     expect(
-      shamir.combineMnemonics(mnemonics.slice(1, 4), Buffer.from('TREZOR', 'utf8')).equals(MS)
+      shamir.combineMnemonics(mnemonics.slice(1, 4), 'TREZOR').equals(MS)
     ).toBe(true);
     expect(
       shamir.combineMnemonics(mnemonics.slice(1, 4)).equals(MS)
@@ -227,16 +220,15 @@ describe('Shamir Mnemonic Tests', () => {
   test('split and reconstruct master secret of 16/20/24/28/32 bytes with passphrase', () => {
     for (const size of MASTER_SECRET_SIZES) {
       const masterSecret = crypto.randomBytes(size);
-      const passphrase = Buffer.from('TREZOR', 'utf8');
       const mnemonics = shamir.generateMnemonics(
         1,
         [[3, 5]],
         masterSecret,
-        passphrase
+        'TREZOR'
       )[0];
       const recovered = shamir.combineMnemonics(
         mnemonics.slice(0, 3),
-        passphrase
+        'TREZOR'
       );
       expect(recovered.length).toBe(size);
       expect(recovered.equals(masterSecret)).toBe(true);
@@ -254,16 +246,28 @@ describe('Shamir Mnemonic Tests', () => {
     const groupedShares = shamir.splitEms(1, [[3, 5]], encryptedMasterSecret);
     const mnemonics = groupedShares[0].map(share => share.mnemonic());
 
-    const recovered = shamir.combineMnemonics(mnemonics.slice(0, 3), Buffer.from('TREZOR', 'utf8'));
+    const recovered = shamir.combineMnemonics(mnemonics.slice(0, 3), 'TREZOR');
     expect(recovered.equals(MS)).toBe(true);
   });
 
   test('recover ems', () => {
-    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, Buffer.from('TREZOR', 'utf8'))[0];
+    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, 'TREZOR')[0];
 
     const groups = shamir.decodeMnemonics(mnemonics.slice(0, 3));
     const encryptedMasterSecret = shamir.recoverEms(groups);
-    const recovered = encryptedMasterSecret.decrypt(Buffer.from('TREZOR', 'utf8'));
+    const recovered = encryptedMasterSecret.decrypt('TREZOR');
     expect(recovered.equals(MS)).toBe(true);
+  });
+
+  test('passphrase: invalid UTF-8 Buffer throws', () => {
+    // Buffer with invalid UTF-8 (e.g. lone continuation byte or invalid sequence)
+    const invalidUtf8 = Buffer.from([0x80]);
+    expect(() => {
+      shamir.generateMnemonics(1, [[3, 5]], MS, invalidUtf8);
+    }).toThrow(/valid UTF-8/);
+    const mnemonics = shamir.generateMnemonics(1, [[3, 5]], MS, 'TREZOR')[0];
+    expect(() => {
+      shamir.combineMnemonics(mnemonics.slice(0, 3), invalidUtf8);
+    }).toThrow(/valid UTF-8/);
   });
 });

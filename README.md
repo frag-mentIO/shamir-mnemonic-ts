@@ -69,19 +69,20 @@ Production code should wipe the recovered buffer after use; see [Handling sensit
 import * as shamir from 'shamir-mnemonic-ts';
 
 const masterSecret = Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex');
-const passphrase = Buffer.from('my passphrase', 'utf8');
 const mnemonics = shamir.generateMnemonics(
   1,
   [[3, 5]],
   masterSecret,
-  passphrase
+  'my passphrase'
 )[0];
 
 const recovered = shamir.combineMnemonics(
   mnemonics.slice(0, 3),
-  passphrase
+  'my passphrase'
 );
 ```
+
+You can also pass a UTF-8-encoded `Buffer` instead of a string; the passphrase must contain only printable ASCII characters (code points 32–126).
 
 ### Group sharing (e.g. 2-of-3 groups)
 
@@ -110,7 +111,6 @@ const recovered = shamir.combineMnemonics(subset);
 import * as shamir from 'shamir-mnemonic-ts';
 
 const state = new shamir.RecoveryState();
-const passphrase = Buffer.from('my passphrase', 'utf8');
 
 // Add mnemonics one by one (e.g. from user input)
 function addMnemonic(mnemonic: string) {
@@ -127,7 +127,7 @@ state.groupStatus(0);   // [entered, threshold] for group 0
 state.groupPrefix(0);   // first words of group 0
 state.isComplete();     // true when enough shares to recover
 
-const recovered = state.recover(passphrase);
+const recovered = state.recover('my passphrase');
 ```
 
 ### Secure cleanup

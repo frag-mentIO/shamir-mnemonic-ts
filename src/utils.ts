@@ -82,3 +82,26 @@ export function secureBufferCopy(
 export function secureBufferFill(buffer: Buffer, value: number = 0): void {
   buffer.fill(value);
 }
+
+export type Passphrase = string | Buffer;
+
+/**
+ * Normalizes a passphrase (string or Buffer) to a Buffer for internal use.
+ * - If a string is passed, it is encoded as UTF-8.
+ * - If a Buffer is passed, it must contain valid UTF-8; otherwise an Error is thrown.
+ * @param passphrase The passphrase as a string or UTF-8-encoded Buffer.
+ * @returns The passphrase as a Buffer.
+ */
+export function normalizePassphrase(passphrase: Passphrase): Buffer {
+  if (typeof passphrase === 'string') {
+    return Buffer.from(passphrase, 'utf8');
+  }
+  // Buffer: verify it is valid UTF-8 (round-trip check)
+  const roundTrip = Buffer.from(passphrase.toString('utf8'), 'utf8');
+  if (roundTrip.compare(passphrase) !== 0) {
+    throw new Error(
+      'The passphrase buffer must contain valid UTF-8 when provided as a Buffer.'
+    );
+  }
+  return passphrase;
+}
